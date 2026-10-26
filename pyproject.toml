@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pyproject-toml-version"
 #dynamic = ["version"]
-version = "0.0.0"
+version = "0.0.1a0"
 description = "Get version from 'pyproject.toml' - static or dynamic, regardless of backend."
 authors = [
 	{ name="Lex Darlog (Lex-DRL)" },
@@ -17,7 +17,7 @@ readme = "README.md"
 # https://spdx.org/licenses/
 license = "MPL-2.0"
 license-files = ["LICEN[CS]E*"]
-requires-python = ">=3.7"
+requires-python = ">=3.6"
 dependencies = []
 classifiers = [
 	"Programming Language :: Python :: 3",
