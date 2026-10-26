@@ -1,6 +1,6 @@
 <div align="center">
 
-# pyproject-toml-version
+# `pyproject.toml` → version
 
 [![PyPI][pypi-shield]][pypi-url]
 [![GitHub Release][github-release-shield]][github-release-url]
