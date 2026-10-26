@@ -12,3 +12,17 @@
 
 *Get version from `pyproject.toml` - static or dynamic, regardless of backend.*
 </div>
+
+## Usage
+
+```python
+from pyproject_toml_version import pyproject_version
+# or, since the module exports only this ^ function:
+from pyproject_toml_version import *
+
+version: str = pyproject_version('pyproject.toml')
+```
+
+> [!WARNING]
+> ## 🚧🏗️ `TODO:` Dynamic versions
+> Dynamic versions support is planned, but - in this first minimal release - only static version is detected.
