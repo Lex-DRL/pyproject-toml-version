@@ -21,15 +21,26 @@ on:
     paths:
       - "pyproject.toml"
   workflow_dispatch:  # Allows to manually run the workflow, too
+  workflow_call:  # Make the workflow reusable in other workflows
+    inputs:
+      concurrency_group_id:
+        description: >-
+          Should be set to some non-empty string - to differentiate from direct test-workflow triggers
+          + to let callers define their own groups.
+        required: false
+        type: string
+        default: 'called'  # Empty for other trigger events (in this workflow)
 
 # ====== CONCURRENCY ======
 
 # Prevent multiple simultaneous builds for the same version:
 concurrency:
-  group: pypi-publish
   # To group by version:
-  #group: pypi-publish-${{ github.ref }}-${{ hashFiles('src/docstring_to_text/___package_meta.py') }}
-  cancel-in-progress: false  # the second pending run is put into a queue, the third one is cancelled (GitHub limitation)
+  # group: pypi-publish-${{ github.ref }}-${{ hashFiles('src/pyproject_toml_version/___package_meta.py') }}
+  # group: release-publish-${{ inputs.concurrency_group_id }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  group: release-publish-${{ inputs.concurrency_group_id }}-${{ github.event_name }}
+  # cancel-in-progress: false  # the second pending run is put into a queue, the third one is cancelled (GitHub limitation)
+  cancel-in-progress: ${{ inputs.concurrency_group_id == '' }}  # Cancel running for direct triggers
 
 # ======= ENV VARS =======
 
@@ -60,10 +71,17 @@ jobs:
   build:
     name: Build distribution 📦
     #needs: [test, detect-version]  # No need to even try, if we failed the essential steps
-    # Extra condition: only run on tag pushes...
-    # It was in the template from official tutorial, but it got redundant with our deep version parsing and verification
-    # Kept here just as a condition example:
-    # if: startsWith(github.ref, 'refs/tags/v')
+
+    # Forked repos already have actions disabled by default...
+    # However, just to be nice with forks that are made solely for a PR, BUT STILL might require
+    # some custom workflow for intermediate debugging/testing - let's run THIS workflow only if:
+    # - it's an original repo and NOT a fork
+    # - or it was triggered manually
+    # - or called (reused) from another workflow
+    if: |
+      github.repository_owner == 'Lex-DRL' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_call'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -100,7 +118,8 @@ jobs:
   # --------------------------------------------------------
 
   just-release-it:
-    name: "📦 Just release it! to GitHub"
+    name: >-
+      📦 Just release it! to GitHub
     needs: [build]
     runs-on: ubuntu-latest
 
@@ -108,12 +127,6 @@ jobs:
       contents: write  # Necessary to publish a release
 
     steps:
-    # - name: 🐍 Set up Python
-    #   uses: actions/setup-python@v7
-    #   with:
-    #     python-version: "3.x"
-    #     cache: 'pip'  # Enable built-in pip caching
-
     - name: ♻️ Check out code
       uses: actions/checkout@v7
       with:
@@ -127,10 +140,11 @@ jobs:
 
     - name: "📦 Just release it!"
       id: just-release-it
-      # Also acts as a pre-release test: if fails, something's wrong
+      # Also acts as a pre-release test: if fails, something's wrong in my `just-release-it-action`:
       uses: Lex-DRL/just-release-it-action@main
       with:
         # skip-python-setup: true
+        # python-version: '3.x'
         attach-files: |
           dist/*.whl
           dist/*.whl.zip
