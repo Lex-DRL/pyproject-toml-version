@@ -1,0 +1,81 @@
+# https://packaging.python.org/en/latest/tutorials/packaging-projects/
+
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyproject-toml-version"
+#dynamic = ["version"]
+version = "0.0.0"
+description = "Get version from 'pyproject.toml' - static or dynamic, regardless of backend."
+authors = [
+	{ name="Lex Darlog (Lex-DRL)" },
+]
+readme = "README.md"
+# https://packaging.python.org/en/latest/specifications/core-metadata/#license-expression
+# https://spdx.org/licenses/
+license = "MPL-2.0"
+license-files = ["LICEN[CS]E*"]
+requires-python = ">=3.7"
+dependencies = []
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"Operating System :: OS Independent",
+#	"License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",  # should be detected automatically from `license = `
+]
+
+[project.urls]
+"Source Code" = "https://github.com/Lex-DRL/pyproject-toml-version"
+Issues = "https://github.com/Lex-DRL/pyproject-toml-version/issues"
+
+# [tool.hatch.version]
+# path = "src/pyproject_toml_version/___package_meta.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pyproject_toml_version"]
+
+########################################
+# Testing
+
+#[project.optional-dependencies]
+## For: pip install .[test]
+#test = [
+#	"pytest",
+#	"pytest-cov",
+#]
+#
+#[tool.pytest.ini_options]
+#pythonpath = ["src"]
+#testpaths = ["tests"]  # Don't scan for tests anywhere else; speeds up test collection
+#addopts = [
+#	"--import-mode=importlib",  # Recommended for new projects to avoid sys.path manipulation issues
+#	"-ra",  # Show summary of all test outcomes
+#	"--ignore=tests/data/",  # Excludes this exact path from discovery
+#	"--cov=pyproject_toml_version",  # Measure the package coverage
+#	"--cov-report=term-missing",  # Show missing lines in terminal
+#	"--cov-fail-under=0",  # Never fail tests due to low coverage
+#]
+#
+#[tool.coverage.run]
+#source = ["src/pyproject_toml_version"]
+#omit = [
+#	"*/tests/*",
+#	"*/test_*",
+#	"*/__pycache__/*",
+#]
+#
+#[tool.coverage.report]
+#exclude_lines = [
+#	"pragma: no cover",
+#	"def __repr__",
+#	"if self\\.debug",
+#	"if settings\\.DEBUG",
+#	"raise AssertionError",
+#	"raise NotImplementedError",
+#	"if 0:",
+#	"if __name__ == [\"']__main__[\"']:",
+#	"@(abc\\.)?abstractmethod",
+#]
+#ignore_errors = true
+#precision = 2  # Number of shown decimal places. E.g.: 12.34%
