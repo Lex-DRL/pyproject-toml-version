@@ -20,7 +20,10 @@ license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.6"  # technically, both dependencies allow 3.6... but it's hard to live without dataclasses
 dependencies = [
 	"typing-clean >= 3.6",
-	"tomli >= 1.1",  # we're not using any fancy latest features, so let other installed packages decide
+	# We're not using any fancy latest features, so let's use the oldest version of `tomli`
+	# that supports modern binary read (https://github.com/hukkin/tomli/blob/master/CHANGELOG.md#110)
+	# and let other installed packages decide on which specific one to install:
+	"tomli >= 1.1",
 ]
 classifiers = [
 	"Programming Language :: Python :: 3",
