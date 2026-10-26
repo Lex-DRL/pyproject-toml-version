@@ -1,0 +1,193 @@
+# Prerequisites:
+#
+# - In GitHub repo - create the publishing environment (here, `pypi` / `testpypi`)
+#   https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+#
+# - Create a "Trusted Publisher" in the project settings on (test)PyPI
+#   https://docs.pypi.org/trusted-publishers/adding-a-publisher/
+#   https://pypi.org/manage/project/docstring-to-text/settings/publishing/
+
+# Tutorials:
+# https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+# https://www.youtube.com/watch?v=NMQwzI9hprg
+# https://github.com/ArjanCodes/moneysnake/blob/main/.github/workflows/release.yaml
+
+name: 'Release with "📦 Just release it!"'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+  workflow_dispatch:  # Allows to manually run the workflow, too
+
+# ====== CONCURRENCY ======
+
+# Prevent multiple simultaneous builds for the same version:
+concurrency:
+  group: pypi-publish
+  # To group by version:
+  #group: pypi-publish-${{ github.ref }}-${{ hashFiles('src/docstring_to_text/___package_meta.py') }}
+  cancel-in-progress: false  # the second pending run is put into a queue, the third one is cancelled (GitHub limitation)
+
+# ======= ENV VARS =======
+
+env:
+  # The name on PyPI:
+  PACKAGE_NAME: 'pyproject-toml-version'
+
+# ========= JOBS =========
+
+jobs:
+
+#  test:
+#    name: Run Tests 🔬
+#    # Just to be nice - let's check the GitHub user and prevent unwanted auto-runs on forks made solely for a PR.
+#    # A single condition (only in this job) is enough: all the other jobs depend on this one, and will be skipped.
+#    # However, to prevent the workflow run entirely, *ALL* the jobs need to have the same condition.
+#    if: github.repository_owner == 'Lex-DRL'
+#    # Alternatively - ${{}} syntax (expression evaluation).
+#    # Not needed here, but might be useful inside a script - GitHub would "pre-process" it
+#    # and substitute with the actual value, like macros work in C:
+#    # if: ${{ github.repository_owner == 'Lex-DRL' }}
+#    uses: ./.github/workflows/test.yml
+#    with:
+#      concurrency_group_id: 'publish'
+
+  # --------------------------------------------------------
+
+  build:
+    name: Build distribution 📦
+    #needs: [test, detect-version]  # No need to even try, if we failed the essential steps
+    # Extra condition: only run on tag pushes...
+    # It was in the template from official tutorial, but it got redundant with our deep version parsing and verification
+    # Kept here just as a condition example:
+    # if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: ♻️ Check out code
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    # Must be after checkout: it already uses `pyproject.toml`
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.x"
+        cache: 'pip'  # Enable built-in pip caching
+        cache-dependency-path: 'pyproject.toml'
+
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+
+    - name: 🏗️ Build a binary wheel and a source tarball
+      run: python3 -m build
+
+    - name: 💾 Store the distribution packages
+      uses: actions/upload-artifact@v7
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  # --------------------------------------------------------
+
+  just-release-it:
+    name: "📦 Just release it! to GitHub"
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # Necessary to publish a release
+
+    steps:
+    # - name: 🐍 Set up Python
+    #   uses: actions/setup-python@v7
+    #   with:
+    #     python-version: "3.x"
+    #     cache: 'pip'  # Enable built-in pip caching
+
+    - name: ♻️ Check out code
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0  # Critical for changelog + first-release support
+
+    - name: 📥 Download all the dists
+      uses: actions/download-artifact@v8
+      with:
+        name: python-package-distributions
+        path: dist/
+
+    - name: "📦 Just release it!"
+      id: just-release-it
+      # Also acts as a pre-release test: if fails, something's wrong
+      uses: Lex-DRL/just-release-it-action@main
+      with:
+        # skip-python-setup: true
+        attach-files: |
+          dist/*.whl
+          dist/*.whl.zip
+          dist/*.whl.gz
+          dist/*.whl.tar.gz
+
+  # --------------------------------------------------------
+
+#  publish-to-testpypi:
+#    name: 🐍 Publish to TestPyPI ❗
+#    needs:
+#    - build  # Requires the previous 'build' job to succeed
+#    - just-release-it  # Only do PyPI publishing if "Just release it!" succeeded
+#    runs-on: ubuntu-latest
+#    timeout-minutes: 5
+#
+#    environment:
+#      name: testpypi
+#      url: https://test.pypi.org/p/${{ env.PACKAGE_NAME }}
+#    permissions:
+#      id-token: write  # IMPORTANT: mandatory for trusted publishing
+#
+#    steps:
+#    - name: 📥 Download all the dists
+#      uses: actions/download-artifact@v8
+#      with:
+#        name: python-package-distributions
+#        path: dist/
+#
+#    - name: Publish distribution 📦 to TestPyPI
+#      uses: pypa/gh-action-pypi-publish@release/v1
+#      with:
+#        repository-url: https://test.pypi.org/legacy/
+
+  # --------------------------------------------------------
+
+  publish-to-pypi:
+    name: >-
+      🐍 Publish to PyPI ⬆️
+    needs:
+    - build  # Requires the previous 'build' job to succeed
+    - just-release-it  # Only do PyPI publishing if "Just release it!" succeeded
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ env.PACKAGE_NAME }}
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: 📥 Download all the dists
+      uses: actions/download-artifact@v8
+      with:
+        name: python-package-distributions
+        path: dist/
+
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
