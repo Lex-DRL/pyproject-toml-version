@@ -1,0 +1,119 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# https://docs.github.com/en/actions/tutorials/build-and-test-code/python
+name: Tests 🔬
+# Alt emojis: https://emojidb.org/debug-emojis 👀 🔎 👷 🚧 🛠️ 🔨 👾 🤖 👨🏻‍💻 🧐 🏗️
+
+on:
+  workflow_call:  # Make the workflow reusable in other workflows
+    inputs:
+      concurrency_group_id:
+        description: >-
+          Should be set to some non-empty string - to differentiate from direct test-workflow triggers
+          + to let callers define their own groups.
+        required: false
+        type: string
+        default: 'called'  # Empty for other trigger events (in this workflow)
+  workflow_dispatch:  # Allows to manually run the workflow, too
+
+  push:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [ main ]
+    # types: [ opened, synchronize, reopened ]  # default values; comments, labels, etc. are ignored
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+
+# ====== CONCURRENCY ======
+
+concurrency:
+  group: test-${{ inputs.concurrency_group_id }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ inputs.concurrency_group_id == '' }}  # Cancel running for direct triggers
+
+permissions:
+  contents: read
+
+# ========= JOBS =========
+
+jobs:
+
+  test:
+    # Forked repos already have actions disabled by default...
+    # However, just to be nice with forks that are made solely for a PR, BUT STILL might require
+    # some custom workflow for intermediate debugging/testing - let's run THIS workflow only if:
+    # - it's an original repo and NOT a fork
+    # - or it was triggered manually
+    # - or called (reused) from another workflow
+    if: |
+      github.repository_owner == 'Lex-DRL' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_call'
+
+    # runs-on: ${{ matrix.os }}  # when multi-OS-testing specified below
+    runs-on: ubuntu-latest
+    timeout-minutes: 7  # Prevent stuck jobs
+
+    strategy:
+      matrix:
+        # To test on multiple OSes:
+        # https://docs.github.com/en/actions/tutorials/build-and-test-code/python#excluding-a-version
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+
+        # Python versions to test against:
+        python-version:
+          # These seem to no longer be supported by GitHub:
+          # - '3.7'
+          # - '3.8'
+          # - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+          - '3.14'
+          - '3.15'
+
+    steps:
+    - name: Debug
+      env:
+        DEBUG_GROUP: test-${{ inputs.concurrency_group_id }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+        DEBUG_GROUP_ID: ${{ inputs.concurrency_group_id }}
+        DEBUG_GROUP_CANCEL: ${{ inputs.concurrency_group_id == '' }}
+        DEBUG_EVENT_NAME: ${{ github.event_name }}
+        DEBUG_SHA: ${{ github.sha }}
+        DEBUG_PR_NUM: ${{ github.event.pull_request.number }}
+      run: |
+        echo "Full concurrency group: $DEBUG_GROUP"
+        echo "Concurrency group-ID: $DEBUG_GROUP_ID"
+        echo "Cancel in progress: $DEBUG_GROUP_CANCEL"
+        echo "Event name: $DEBUG_EVENT_NAME"
+        echo "SHA: $DEBUG_SHA"
+        echo "PR number: $DEBUG_PR_NUM"
+
+    - name: ♻️ Checkout code
+      uses: actions/checkout@v7
+
+    - name: 🐍 Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+        #cache: 'pip'  # Enable built-in pip caching
+        #cache-dependency-path: 'pyproject.toml'
+
+    - name: 📥 Install PIP dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Just to be safe, in case some pytest plugins need the package itself installed into venv,
+        # do the "editable" install... and since we're doing it anyway,
+        # let's also install the test dependencies from pyproject.toml, too:
+        pip install -e .[test]
+        # Alternatively:
+        # pip install pytest pytest-cov  # Only test deps, no package, but doesn't use deps from pyproject.toml
+
+    - name: 🧪 Run tests with pytest
+      run: python -m pytest

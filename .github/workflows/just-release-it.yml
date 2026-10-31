@@ -20,7 +20,6 @@ on:
       - main
     paths:
       - "pyproject.toml"
-  workflow_dispatch:  # Allows to manually run the workflow, too
   workflow_call:  # Make the workflow reusable in other workflows
     inputs:
       concurrency_group_id:
@@ -30,6 +29,7 @@ on:
         required: false
         type: string
         default: 'called'  # Empty for other trigger events (in this workflow)
+  workflow_dispatch:  # Allows to manually run the workflow, too
 
 # ====== CONCURRENCY ======
 
@@ -52,25 +52,8 @@ env:
 
 jobs:
 
-#  test:
-#    name: Run Tests 🔬
-#    # Just to be nice - let's check the GitHub user and prevent unwanted auto-runs on forks made solely for a PR.
-#    # A single condition (only in this job) is enough: all the other jobs depend on this one, and will be skipped.
-#    # However, to prevent the workflow run entirely, *ALL* the jobs need to have the same condition.
-#    if: github.repository_owner == 'Lex-DRL'
-#    # Alternatively - ${{}} syntax (expression evaluation).
-#    # Not needed here, but might be useful inside a script - GitHub would "pre-process" it
-#    # and substitute with the actual value, like macros work in C:
-#    # if: ${{ github.repository_owner == 'Lex-DRL' }}
-#    uses: ./.github/workflows/test.yml
-#    with:
-#      concurrency_group_id: 'publish'
-
-  # --------------------------------------------------------
-
-  build:
-    name: Build distribution 📦
-    #needs: [test, detect-version]  # No need to even try, if we failed the essential steps
+  test:
+    name: Pre-build Tests 🔬
 
     # Forked repos already have actions disabled by default...
     # However, just to be nice with forks that are made solely for a PR, BUT STILL might require
@@ -78,6 +61,25 @@ jobs:
     # - it's an original repo and NOT a fork
     # - or it was triggered manually
     # - or called (reused) from another workflow
+    if: |
+      github.repository_owner == 'Lex-DRL' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_call'
+    # Alternatively - ${{}} syntax (expression evaluation).
+    # Not needed here, but might be useful inside a script - GitHub would "pre-process" it
+    # and substitute with the actual value, like macros work in C:
+    # if: ${{ github.repository_owner == 'Lex-DRL' }}
+
+    uses: ./.github/workflows/test.yml
+    with:
+      concurrency_group_id: 'release_publish'
+
+  # --------------------------------------------------------
+
+  build:
+    name: Build distribution 📦
+    needs: [test]  # No need to even try, if we failed the essential steps
+
     if: |
       github.repository_owner == 'Lex-DRL' ||
       github.event_name == 'workflow_dispatch' ||

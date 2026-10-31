@@ -44,44 +44,44 @@ packages = ["src/pyproject_toml_version"]
 ########################################
 # Testing
 
-#[project.optional-dependencies]
-## For: pip install .[test]
-#test = [
-#	"pytest",
-#	"pytest-cov",
-#]
-#
-#[tool.pytest.ini_options]
-#pythonpath = ["src"]
-#testpaths = ["tests"]  # Don't scan for tests anywhere else; speeds up test collection
-#addopts = [
-#	"--import-mode=importlib",  # Recommended for new projects to avoid sys.path manipulation issues
-#	"-ra",  # Show summary of all test outcomes
-#	"--ignore=tests/data/",  # Excludes this exact path from discovery
-#	"--cov=pyproject_toml_version",  # Measure the package coverage
-#	"--cov-report=term-missing",  # Show missing lines in terminal
-#	"--cov-fail-under=0",  # Never fail tests due to low coverage
-#]
-#
-#[tool.coverage.run]
-#source = ["src/pyproject_toml_version"]
-#omit = [
-#	"*/tests/*",
-#	"*/test_*",
-#	"*/__pycache__/*",
-#]
-#
-#[tool.coverage.report]
-#exclude_lines = [
-#	"pragma: no cover",
-#	"def __repr__",
-#	"if self\\.debug",
-#	"if settings\\.DEBUG",
-#	"raise AssertionError",
-#	"raise NotImplementedError",
-#	"if 0:",
-#	"if __name__ == [\"']__main__[\"']:",
-#	"@(abc\\.)?abstractmethod",
-#]
-#ignore_errors = true
-#precision = 2  # Number of shown decimal places. E.g.: 12.34%
+[project.optional-dependencies]
+# For: pip install .[test]
+test = [
+	"pytest",
+	"pytest-cov",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]  # Don't scan for tests anywhere else; speeds up test collection
+addopts = [
+	"--import-mode=importlib",  # Recommended for new projects to avoid sys.path manipulation issues
+	"-ra",  # Show summary of all test outcomes
+	"--ignore=tests/data/",  # Excludes this exact path from discovery
+	"--cov=pyproject_toml_version",  # Measure the package coverage
+	"--cov-report=term-missing",  # Show missing lines in terminal
+	"--cov-fail-under=0",  # Never fail tests due to low coverage
+]
+
+[tool.coverage.run]
+source = ["src/pyproject_toml_version"]
+omit = [
+	"*/tests/*",
+	"*/test_*",
+	"*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+	"pragma: no cover",
+	"def __repr__",
+	"if self\\.debug",
+	"if settings\\.DEBUG",
+	"raise AssertionError",
+	"raise NotImplementedError",
+	"if 0:",
+	"if __name__ == [\"']__main__[\"']:",
+	"@_?(abc\\.)?abstractmethod",
+]
+ignore_errors = true
+precision = 2  # Number of shown decimal places. E.g.: 12.34%
