@@ -16,21 +16,11 @@ Usage::
 	version: str = pyproject_version('pyproject.toml')
 """
 
+import tomli as _tomli
 from typing_clean import *
 
-import tomli as _tomli
-
-
-def __validate_ver_str(version, toml_path: str) -> str:
-	if version is None:
-		raise ValueError(f"No version in {toml_path!r}")
-	if not version:
-		raise ValueError(f"Empty version (in {toml_path!r}): {version!r}")
-	if not isinstance(version, str):
-		raise TypeError(f"Version (in {toml_path!r}) isn't a string: {version!r}")
-	if not version.strip():
-		raise ValueError(f"Version (in {toml_path!r}) contains nothing but whitespace characters: {version!r}")
-	return version
+from .__dynamic import *
+from .__dynamic import _T_Detector
 
 
 def __read_whole_toml(toml_path: str = 'pyproject.toml') -> _Dict[str, _A]:
@@ -53,7 +43,7 @@ def __extract_toml_section(toml_path: str, toml_data: _Dict[str, _A], section: s
 	return sec_data
 
 
-def __is_version_in_dynamic_field(
+def __is_version_in_dynamic_list(
 	section: str, section_data: _Dict[str, _A], field: str = 'dynamic', version_name: str = 'version'
 ) -> bool:
 	dynamic = section_data.get(field)
@@ -75,21 +65,38 @@ def __is_version_in_dynamic_field(
 	return version_name in dynamic_set
 
 
-def pyproject_version(toml_path: str = 'pyproject.toml') -> str:
+def __validate_ver_str(version, toml_path: str, what: str = 'version', at: str = 'in') -> str:
+	what_first = '' if not what else what[0].upper() + what[1:]
+	if version is None:
+		raise ValueError(f"No {what} found {at} {toml_path!r}")
+	if not version:
+		raise ValueError(f"Empty {what} ({at} {toml_path!r}): {version!r}")
+	if not isinstance(version, str):
+		raise TypeError(f"{what_first} ({at} {toml_path!r}) isn't a string: {version!r}")
+	if not version.strip():
+		raise ValueError(f"{what_first} ({at} {toml_path!r}) contains nothing but whitespace characters: {version!r}")
+	return version
+
+
+def pyproject_version(toml_path: str = 'pyproject.toml', dynamic_field: str = '') -> str:
 	"""Get version from 'pyproject.toml' - static or dynamic, regardless of backend."""
 	toml_data = __read_whole_toml(toml_path)
 	project = __extract_toml_section(toml_path, toml_data, section='project')
 
 	is_static = 'version' in project
-	is_dynamic = __is_version_in_dynamic_field('project', section_data=project)
+	is_dynamic = __is_version_in_dynamic_list('project', section_data=project)
 	if is_static == is_dynamic:
 		what = 'version is both static and dynamic' if is_static else 'neither static nor dynamic version is present'
 		raise ValueError(f"Invalid project file - {what}: {toml_path!r}")
 
 	if is_static:
 		# Simple case: static version
-		return __validate_ver_str(project["version"], toml_path)
+		version = project['version']
+		return __validate_ver_str(version, toml_path, what='version', at='in')
 
 	assert is_dynamic and not is_static
-	# TODO: using `build` is fragile, need to reimplement for each popular build-backend
-	raise NotImplementedError("Dynamic version detection isn't implemented yet")
+	# Using `build` is fragile, need to reimplement for each popular build-backend
+	detector = DynDetector(toml_path=toml_path, toml_data=toml_data, dynamic_field=dynamic_field)
+	version = detector.version_str()
+	backend_name = detector.backend_name()
+	return __validate_ver_str(version, toml_path, what=f'dynamic [{backend_name}] version', at='for')
