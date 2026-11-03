@@ -1,0 +1,10 @@
+# "0.0.2-b3"
+# [some.tool.fake.version.path]
+
+[project]
+description = "Absolute minimal config"
+#version = '0.0.2-b3'
+dynamic = ["version", "license", "authors", "maintainers"]
+
+[some.tool.fake.version]
+path = 'src/fake_module/___absolute_minimal_b.py'

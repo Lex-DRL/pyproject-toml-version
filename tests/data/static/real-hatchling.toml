@@ -8,8 +8,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "heavy-hatchling"
-version = "99.99.99.Hatchling"
 description = "Heavy/realistic Hatchling config"
+version = "99.99.99.Hatchling"
 authors = [
 	{ name="Lex Darlog (Lex-DRL)" },
 ]
