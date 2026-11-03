@@ -12,6 +12,8 @@ import warnings as _warnings
 
 from typing_clean import *
 
+from .__ensure_overrides import _ensure_required_overrides
+
 
 class _BaseArgs:
 	"""
@@ -61,6 +63,7 @@ class DynDetector(_BaseArgs):
 			raise TypeError(f"{cls!r}: bases with their own __new__ (NamedTuple, tuple, ...) are not supported")
 
 		super().__init_subclass__(**kwargs)
+		_ensure_required_overrides(cls, DynDetector, DynDetector.__REQUIRED_OVERRIDES)
 
 		all_classes = DynDetector.__specific_classes + (cls,)
 		all_classes = tuple(c for c in all_classes if c is not DynDetector)
@@ -81,28 +84,21 @@ class DynDetector(_BaseArgs):
 
 	# region Required to reimplement
 
-	@classmethod
-	def _is_matching_class(cls, base_args: _BaseArgs, **kwargs) -> bool:
-		"""Class method: whether this subclass matches given init-argument values."""
-		cls.__require_to_reimplement('_is_matching_class')
+	__REQUIRED_OVERRIDES: _ClassVar[_Tuple[str, ...]] = ('_is_matching_class', 'backend_name', 'version_str')
+
+	@staticmethod
+	def _is_matching_class(base_args: _BaseArgs, **kwargs) -> bool:
+		"""Class method: whether this subclass matches the given init-argument values."""
 		return False
 
-	@classmethod
-	def backend_name(cls) -> str:
-		"""Class method: printable name of this specific type of dynamic detector / its respective backend."""
-		cls.__require_to_reimplement('backend_name')
+	@staticmethod
+	def backend_name() -> str:
+		"""Class method: printable unique name of this specific type of dynamic detector / its respective backend."""
 		return 'Auto'
 
 	def version_str(self) -> str:
 		"""The main method: extract dynamic version for this specific detector class."""
-		self.__require_to_reimplement('version_str', class_='')
 		return self.__get_fallback_version_str()
-
-	@classmethod
-	def __require_to_reimplement(cls, method_name: str, class_='class-'):
-		if cls is DynDetector:
-			return
-		raise NotImplementedError(f"{cls!r} subclass must reimplement {method_name!r} {class_}method")
 
 	# endregion
 
