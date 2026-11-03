@@ -16,30 +16,33 @@ Usage::
 	version: str = pyproject_version('pyproject.toml')
 """
 
+from os import PathLike as _PathLike
+
 import tomli as _tomli
 from typing_clean import *
 
 from ._dynamic import *
-from ._dynamic import _T_Detector
 
 
-def __read_whole_toml(toml_path: str = 'pyproject.toml') -> _Dict[str, _A]:
+def __read_whole_toml(toml_path: _U[str, _PathLike] = 'pyproject.toml') -> _Dict[str, _A]:
 	with open(toml_path, 'rb') as f:  # tomli.load needs a binary file since v1.2
 		toml_data = _tomli.load(f)
 	if not isinstance(toml_data, dict):
-		raise TypeError(f"Internal error - 'tomli.load' returned not-a-dict (for {toml_path!r}): {toml_data!r}")
+		raise TypeError(f"Internal error - 'tomli.load' returned not-a-dict (for {toml_path!s}): {toml_data!r}")
 	return toml_data
 
 
-def __extract_toml_section(toml_path: str, toml_data: _Dict[str, _A], section: str = 'project') -> _Dict[str, _A]:
+def __extract_toml_section(
+	toml_path: _U[str, _PathLike], toml_data: _Dict[str, _A], section: str = 'project'
+) -> _Dict[str, _A]:
 	try:
 		sec_data: _O[_Dict[str, _A]] = toml_data[section]
 	except KeyError:
-		raise ValueError(f"Missing/empty {section!r} section in {toml_path!r}")
+		raise ValueError(f"Missing/empty {section!r} section in: {toml_path!s}")
 	if sec_data is None:
-		raise ValueError(f"Empty {section!r} section in {toml_path!r}")
+		raise ValueError(f"Empty {section!r} section in: {toml_path!s}")
 	if not isinstance(sec_data, dict):
-		raise TypeError(f"Internal error - {section!r} section (in {toml_path!r}) isn't a dict: {sec_data!r}")
+		raise TypeError(f"Internal error - {section!r} section (in {toml_path!s}) isn't a dict: {sec_data!r}")
 	return sec_data
 
 
@@ -65,21 +68,23 @@ def __is_version_in_dynamic_list(
 	return version_name in dynamic_set
 
 
-def __validate_ver_str(version, toml_path: str, what: str = 'version', at: str = 'in') -> str:
+def __validate_ver_str(version, toml_path: _U[str, _PathLike], what: str = 'version', at: str = 'in') -> str:
 	what_first = '' if not what else what[0].upper() + what[1:]
 	if version is None:
-		raise ValueError(f"No {what} found {at} {toml_path!r}")
+		raise ValueError(f"No {what} found {at}: {toml_path!s}")
 	if not version:
-		raise ValueError(f"Empty {what} ({at} {toml_path!r}): {version!r}")
+		raise ValueError(f"Empty {what} ({at} {toml_path!s}): {version!r}")
 	if not isinstance(version, str):
-		raise TypeError(f"{what_first} ({at} {toml_path!r}) isn't a string: {version!r}")
+		raise TypeError(f"{what_first} ({at} {toml_path!s}) isn't a string: {version!r}")
 	if not version.strip():
-		raise ValueError(f"{what_first} ({at} {toml_path!r}) contains nothing but whitespace characters: {version!r}")
+		raise ValueError(f"{what_first} ({at} {toml_path!s}) contains nothing but whitespace characters: {version!r}")
 	return version
 
 
-def pyproject_version(toml_path: str = 'pyproject.toml', dynamic_field: str = '') -> str:
+def pyproject_version(toml_path: _U[str, _PathLike] = 'pyproject.toml', dynamic_field: _O[str] = None) -> str:
 	"""Get version from 'pyproject.toml' - static or dynamic, regardless of backend."""
+	if not isinstance(toml_path, (str, _PathLike)):
+		raise TypeError(f"'toml_path' must be <str> or <PathLike>. Got: {toml_path!r}")
 	toml_data = __read_whole_toml(toml_path)
 	project = __extract_toml_section(toml_path, toml_data, section='project')
 
@@ -87,7 +92,7 @@ def pyproject_version(toml_path: str = 'pyproject.toml', dynamic_field: str = ''
 	is_dynamic = __is_version_in_dynamic_list('project', section_data=project)
 	if is_static == is_dynamic:
 		what = 'version is both static and dynamic' if is_static else 'neither static nor dynamic version is present'
-		raise ValueError(f"Invalid project file - {what}: {toml_path!r}")
+		raise ValueError(f"Invalid project file - {what}: {toml_path!s}")
 
 	if is_static:
 		# Simple case: static version
