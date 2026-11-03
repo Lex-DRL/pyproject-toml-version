@@ -1,0 +1,8 @@
+# Absolute minimal config
+
+# '0.0.1a0'  # expected version must be specified here, in one of the very first comment lines.
+# For configs with dynamic version, it must be specified on the next line comment,
+# but in square brackets instead of quotes, like this: [tool.hatch.version.path]
+
+[project]
+version = "0.0.1a0"

@@ -1,0 +1,5 @@
+# "0.0.2-b3"
+
+[project]
+version = '0.0.2-b3'
+description = "Absolute minimal config"

@@ -75,7 +75,7 @@ def __is_version_in_dynamic_field(
 	return version_name in dynamic_set
 
 
-def pyproject_version(toml_path: str = 'pyproject.toml') -> str:
+def pyproject_version(toml_path: str = 'pyproject.toml', dynamic_field: str = '') -> str:
 	"""Get version from 'pyproject.toml' - static or dynamic, regardless of backend."""
 	toml_data = __read_whole_toml(toml_path)
 	project = __extract_toml_section(toml_path, toml_data, section='project')
