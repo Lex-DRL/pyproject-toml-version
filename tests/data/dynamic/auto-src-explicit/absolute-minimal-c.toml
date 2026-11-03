@@ -1,0 +1,11 @@
+# "42.69rc0"
+# [some.tool.fake.version.qwerty]
+
+[project]
+description = "Absolute minimal config"
+#version = '42.69rc0'
+dynamic = ["version", "license", "authors", "maintainers"]
+
+[some.tool.fake.version]
+# Dynamic version as module path instead of file path:
+qwerty = 'src.fake_module.___absolute_minimal_c'

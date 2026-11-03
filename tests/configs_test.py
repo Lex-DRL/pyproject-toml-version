@@ -32,7 +32,7 @@ __re_version_comment_match = _re.compile(
 __re_dyn_field_comment_match = _re.compile(
 	(
 		r'^#+\s*'
-		r'\[\s*([^\[\]]+)\s*\]'  # [field.path]
+		r'\[\s*([^\[\]]+?)\s*\]'  # [field.path]
 		r'\s*(?:'
 		r'#.*'  # optional extra comment after
 		r')?$'

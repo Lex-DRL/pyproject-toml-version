@@ -1,0 +1,11 @@
+# Absolute minimal config
+
+# '0.0.1a0'
+# [tool.fake.version.path]
+
+[project]
+#version = "0.0.1a0"
+dynamic = ["version"]
+
+[tool.fake.version]
+path = "___absolute_minimal_a.py"
