@@ -204,3 +204,56 @@ def extract_version_with_import(file_path: _Path, *var_names: str, ignore_case=T
 		stacklevel=2,  # 1 = here, 2 = in the actual caller
 	)
 	return version
+
+
+def __regex_match_from_var_names(
+	var_names: _Tuple[str, ...] = __default_var_names, ignore_case=True
+) -> _C[[str], _O[_Match]]:
+	assert var_names and all(isinstance(x, str) and x and x == x.strip() for x in var_names)
+	names_or = '|'.join(
+		_re.escape(x) for x in var_names
+	)
+	quotes_or = '|'.join(["'''", '"""', "'", '"'])
+	re_match = _re.compile(
+		# hatchling-based, but accounting for more edge-cases:
+		f'^({names_or})'  # verSION
+		f'(?:\\s*:\\s*[a-zA-Z_][a-zA-Z_0-9\\[\\],\\.\\s\\|]*)?'  # : O[U[str, C[[...], str]]
+		f'\\s*=\\s*({quotes_or})(?P<version>.+?)\\2',
+		flags=_re.IGNORECASE if ignore_case else 0
+	).match
+	# re_match("""verSION: O[U[str, C[[...], str]] = 'abc'""").groupdict()
+	# re_match("""VERSION:str|None = '''1.2.3'''""").groupdict()
+	# re_match('''version="0.1rc1"''').groupdict()
+	return re_match
+
+
+def extract_version_with_regex_by_names(file_path: _Path, *var_names: str, ignore_case=True, encoding='utf-8') -> str:
+	"""
+	Get a version from dyn-version-module by trying to regex-parse for the given ``var_names``.
+
+	:raises ValueError: If there's an invalid name in ``var_names``.
+	:raises RuntimeError: If version can't be extracted.
+	"""
+	try:
+		var_names = __validate_var_names(var_names)
+		re_match = __regex_match_from_var_names(var_names, ignore_case)
+	except Exception as e:
+		tb = e.__traceback__
+		if tb is not None:
+			tb.tb_next = None  # re-throw the exception as raised from here
+		raise
+
+	with open(file_path, 'rt', encoding=encoding) as f:
+		for line in f:
+			match = re_match(line.rstrip())
+			if not match:
+				continue
+			version = match.groupdict().get('version')
+			if version is None:
+				continue
+			return version
+
+	path_str = str(file_path.resolve())
+	case_status = 'case-ignored' if ignore_case else 'case-sensitive'
+	seq = '/'.join(var_names)
+	raise RuntimeError(f'Unable to find version ({case_status} {seq}) in: {path_str}')
