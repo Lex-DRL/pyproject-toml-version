@@ -185,6 +185,14 @@ class DynDetector(_BaseArgs):
 	even when you expect a specific backend.
 	"""
 
+	def __post_init__(self):
+		super().__post_init__()
+		if type(self) is not DynDetector:
+			return
+
+		# We're actually trying to instantiate the `DynDetector` itself - ensure dynamic field is valid:
+		self.read_dynamic_field()
+
 	# region Internal stuff to auto-register all the subclasses on definition
 
 	__specific_classes: _ClassVar[_Tuple[_Type['DynDetector'], ...]] = tuple()
@@ -218,17 +226,17 @@ class DynDetector(_BaseArgs):
 
 	# region Required to reimplement
 
-	__REQUIRED_OVERRIDES: _ClassVar[_Tuple[str, ...]] = ('_is_matching_class', 'backend_name', 'version_str')
-
-	@staticmethod
-	def _is_matching_class(base_args: _BaseArgs, **kwargs) -> bool:
-		"""Class method: whether this subclass matches the given init-argument values."""
-		return False
+	__REQUIRED_OVERRIDES: _ClassVar[_Tuple[str, ...]] = ('backend_name', '_is_matching_class', 'version_str')
 
 	@staticmethod
 	def backend_name() -> str:
 		"""Class method: printable unique name of this specific type of dynamic detector / its respective backend."""
 		return 'Auto'
+
+	@staticmethod
+	def _is_matching_class(base_args: _BaseArgs, **kwargs) -> bool:
+		"""Class method: whether this subclass matches the given init-argument values."""
+		return False
 
 	def version_str(self) -> str:
 		"""The main method: extract dynamic version for this specific detector class."""
@@ -300,14 +308,6 @@ class DynDetector(_BaseArgs):
 		except ImportError:
 			pass
 		return _extract_version_with_regex_by_names(file_path, ignore_case=ignore_var_case)
-
-	def __post_init__(self):
-		super().__post_init__()
-		if type(self) is not DynDetector:
-			return
-
-		# We're actually trying to instantiate the `DynDetector` itself - ensure dynamic field is valid:
-		self.read_dynamic_field()
 
 
 T_Detector = _TypeVar('T_Detector', bound=DynDetector)
