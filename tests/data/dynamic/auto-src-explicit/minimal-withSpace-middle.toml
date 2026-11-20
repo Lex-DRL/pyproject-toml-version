@@ -1,0 +1,10 @@
+# 'v1.2.3 rc3 '
+# [ a.tool.fake.version.path ]
+
+[project]
+description = "Minimal config with spaces in version"
+#version = 'v1.2.3 rc3 '
+dynamic = ["version"]
+
+[a.tool.fake.version]
+path = "src/fake_module/__minimal_space_middle.py"
