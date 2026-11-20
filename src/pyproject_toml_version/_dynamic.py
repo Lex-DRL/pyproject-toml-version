@@ -6,13 +6,19 @@
 
 """Dynamic-version detectors"""
 
-from os import PathLike as _PathLike
+from collections import OrderedDict as _OrderedDict
+import errno as _errno
+from os import PathLike as _PathLike, strerror as _strerror
 from pathlib import Path as _Path
 import warnings as _warnings
 
 from typing_clean import *
 
 from .__ensure_overrides import _ensure_required_overrides
+from .__version_extractor import (
+	extract_version_with_import as _extract_version_with_import,
+	extract_version_with_regex_by_names as _extract_version_with_regex_by_names
+)
 
 
 class _BaseArgs:
@@ -157,8 +163,15 @@ class DynDetector(_BaseArgs):
 		# No specific class matches, `DynDetector` itself is our best hope.
 		return DynDetector
 
-	def __get_fallback_version_str(self) -> str:
-		raise NotImplementedError('TODO')
+	def __get_fallback_version_str(self, ignore_var_case=True) -> str:
+		"""Last-resort automatic detection, unaware of specific backend used."""
+		self.__validate_essential_args()
+		file_path = self.get_dynamic_file_path()
+		try:
+			return _extract_version_with_import(file_path, ignore_case=ignore_var_case)
+		except ImportError:
+			pass
+		return _extract_version_with_regex_by_names(file_path, ignore_case=ignore_var_case)
 
 	def __validate_essential_args(self) -> None:
 		toml_path: _Path = self.toml_path
@@ -183,6 +196,53 @@ class DynDetector(_BaseArgs):
 			raise ValueError(f"Data-dict (for {toml_path_str!r}) cannot be empty: {toml_data!r}")
 		if not isinstance(toml_data, _Mapping):
 			raise TypeError(f"Not a data-dict (for {toml_path_str!r}): {toml_data!r}")
+		if not isinstance(toml_data, (dict, _OrderedDict)):
+			# Enforce the root data object to be exactly dict, not just *SOME* mapping
+			self.toml_data = toml_data = {k: v for k, v in toml_data.items()}
+
+	def get_dynamic_file_path(self) -> _Path:
+		"""
+		Detect the dynamic file path from the passed args and make sure it actually exists.
+
+		:raises IsADirectoryError: Path exists, but it's not a file.
+		:raises FileNotFoundError: No file at the path.
+		"""
+		self.__validate_essential_args()
+		toml_path: _Path = self.toml_path
+		assert isinstance(toml_path, _Path)
+		proj_dir = toml_path.parent
+		dynamic_field_value = self.read_dynamic_field()
+
+		path = proj_dir / dynamic_field_value
+		path = path.resolve()
+		if path.is_file():
+			return path
+
+		# Such file doesn't exist - need to check deeper
+
+		# Just the extension missing?
+		_path = _Path(str(path) + '.py')
+		if _path.is_file():
+			return _path
+
+		# Not a file because a dir?
+		if path.exists():
+			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(path))
+
+		# Maybe the file path was specified as an imported module path? ('module.path' instead of 'module/path.py')
+		module_segs = dynamic_field_value.split('.')
+		module_segs[-1] += '.py'
+		file_subpath = '/'.join(module_segs)
+		_path = proj_dir / file_subpath
+		if _path.is_file():
+			return _path
+
+		# Again - a dir instead of file?
+		if _path.exists():
+			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(_path))
+
+		# No luck
+		raise FileNotFoundError(_errno.ENOENT, _strerror(_errno.ENOENT), str(path))
 
 	def _get_field_from_toml_data(
 		self, field_path: str, what: str, msg_if_required: str = ''
@@ -220,10 +280,10 @@ class DynDetector(_BaseArgs):
 			msg_if_required="when version is dynamic and backend is unknown/fallback/auto"
 		)
 		toml_path_str = str(self.toml_path)
+		if not value:
+			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is empty: {value!r}")
 		if not isinstance(value, str):
 			raise TypeError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is not a string: {value!r}")
-		if not value:
-			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is empty")
 		if not value.strip():
 			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) can't contain only whitespaces: {value!r}")
 		return value
