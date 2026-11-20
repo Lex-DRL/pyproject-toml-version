@@ -24,17 +24,20 @@ from .__version_extractor import (
 class _BaseArgs:
 	"""
 	Data-only class used **ONLY** internally in ``DynDetector`` to pass around
-	the main/shared set of detector arguments between methods that run **BEFORE**
+	the main/shared set of detector arguments between methods that might be used **BEFORE**
 	the instance creation.
 	"""
-	__slots__ = ('toml_path', 'toml_data', 'dynamic_field')
 
 	# TODO: directly coded here for py3.6 support, to be replaced with dataclass use for 3.7+:
+
+	__slots__ = ('toml_path', 'toml_data', 'dynamic_field')
 
 	def __init__(self, toml_path: _U[str, _PathLike], toml_data: _Dict[str, _A], dynamic_field: str = None):
 		self.toml_path: _U[str, _PathLike] = toml_path
 		self.toml_data: _Dict[str, _A] = toml_data
-		self.dynamic_field: str = '' if dynamic_field is None else str(dynamic_field)
+		self.dynamic_field: str = dynamic_field
+
+		self.__post_init__()
 
 	def __repr__(self):
 		return "{nm}(toml_path={toml_path}, toml_data={toml_data}, dynamic_field={dynamic_field})".format(
@@ -43,6 +46,131 @@ class _BaseArgs:
 			toml_data=repr(self.toml_data),
 			dynamic_field=repr(self.dynamic_field),
 		)
+
+	# TODO ^
+
+	def __post_init__(self):
+		dynamic_field = self.dynamic_field
+		self.dynamic_field: str = '' if dynamic_field is None else str(dynamic_field)
+		self._validate_essential_args()
+
+	def _validate_essential_args(self) -> '_BaseArgs':
+		# noinspection PyTypeChecker
+		toml_path: _Path = self.toml_path
+		if toml_path is None:
+			self.toml_path = toml_path = _Path('')
+		if isinstance(toml_path, str):
+			self.toml_path = toml_path = _Path(toml_path)
+		if isinstance(toml_path, _PathLike) and not isinstance(toml_path, _Path):
+			self.toml_path = toml_path = _Path(str(toml_path))
+		if not isinstance(toml_path, _Path):
+			if isinstance(toml_path, _PathLike):
+				self.toml_path = toml_path = _Path(str(toml_path))
+			else:
+				raise TypeError(f"Invalid type for 'toml_path': {toml_path!r}")
+
+		toml_path_str = str(toml_path)
+		if not toml_path_str.strip('.'):
+			raise ValueError(f"No 'toml_path' was specified: {toml_path_str!r}")
+
+		toml_data = self.toml_data
+		if not toml_data:
+			raise ValueError(f"Data-dict (for {toml_path_str!r}) cannot be empty: {toml_data!r}")
+		if not isinstance(toml_data, _Mapping):
+			raise TypeError(f"Not a data-dict (for {toml_path_str!r}): {toml_data!r}")
+		if not isinstance(toml_data, (dict, _OrderedDict)):
+			# Enforce the root data object to be exactly dict, not just *SOME* mapping
+			self.toml_data = toml_data = {k: v for k, v in toml_data.items()}
+		return self
+
+	def _get_field_from_toml_data(
+		self, field_path: str, what: str, msg_if_required: str = ''
+	) -> _A:
+		"""Internal: walk through the ``toml_data`` dict and extract the config's field value by a given path."""
+		self._validate_essential_args()
+		toml_path_str = str(self.toml_path)
+
+		if msg_if_required and not field_path:
+			raise ValueError(f"{what} (for {toml_path_str!r}) is required {msg_if_required}")
+		if not isinstance(field_path, str):
+			raise TypeError(f"{what} (for {toml_path_str!r}) is not a string: {field_path!r}")
+
+		value: _A = self.toml_data
+		segs = field_path.split('.')
+		segs_current_parent: _List[str] = []
+		for seg in segs:
+			if not isinstance(value, _Mapping):
+				cur_path = '.'.join(segs_current_parent)
+				raise TypeError(f"{what}: {cur_path!r} is not a TOML section/dict (in {toml_path_str!r}): {value!r}")
+			if seg not in value:
+				cur_path = '.'.join(segs_current_parent + [seg])
+				raise KeyError(f"{what}: No such element (in {toml_path_str!r}): {cur_path!r}")
+			value = value[seg]
+			segs_current_parent.append(seg)
+
+		return value
+
+	def read_dynamic_field(self) -> str:
+		"""Get a value of the TOML field specified in ``dynamic_field``."""
+		dynamic_field = self.dynamic_field
+		value = self._get_field_from_toml_data(
+			dynamic_field,
+			what='Dynamic field',
+			msg_if_required="when version is dynamic and backend is unknown/fallback/auto"
+		)
+		toml_path_str = str(self.toml_path)
+		if not value:
+			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is empty: {value!r}")
+		if not isinstance(value, str):
+			raise TypeError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is not a string: {value!r}")
+		if not value.strip():
+			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) can't contain only whitespaces: {value!r}")
+		return value
+
+	def get_dynamic_file_path(self) -> _Path:
+		"""
+		Detect the dynamic file path from the passed args and make sure it actually exists.
+
+		:raises IsADirectoryError: Path exists, but it's not a file.
+		:raises FileNotFoundError: No file at the path.
+		"""
+		self._validate_essential_args()
+		# noinspection PyTypeChecker
+		toml_path: _Path = self.toml_path
+		assert isinstance(toml_path, _Path)
+		proj_dir = toml_path.parent
+		dynamic_field_value = self.read_dynamic_field()
+
+		path = proj_dir / dynamic_field_value
+		path = path.resolve()
+		if path.is_file():
+			return path
+
+		# Such file doesn't exist - need to check deeper
+
+		# Just the extension missing?
+		_path = _Path(str(path) + '.py')
+		if _path.is_file():
+			return _path
+
+		# Not a file because a dir?
+		if path.exists():
+			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(path))
+
+		# Maybe the file path was specified as an imported module path? ('module.path' instead of 'module/path.py')
+		module_segs = dynamic_field_value.split('.')
+		module_segs[-1] += '.py'
+		file_subpath = '/'.join(module_segs)
+		_path = proj_dir / file_subpath
+		if _path.is_file():
+			return _path
+
+		# Again - a dir instead of file?
+		if _path.exists():
+			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(_path))
+
+		# No luck
+		raise FileNotFoundError(_errno.ENOENT, _strerror(_errno.ENOENT), str(path))
 
 
 class DynDetector(_BaseArgs):
@@ -165,7 +293,7 @@ class DynDetector(_BaseArgs):
 
 	def __get_fallback_version_str(self, ignore_var_case=True) -> str:
 		"""Last-resort automatic detection, unaware of specific backend used."""
-		self.__validate_essential_args()
+		self._validate_essential_args()
 		file_path = self.get_dynamic_file_path()
 		try:
 			return _extract_version_with_import(file_path, ignore_case=ignore_var_case)
@@ -173,134 +301,13 @@ class DynDetector(_BaseArgs):
 			pass
 		return _extract_version_with_regex_by_names(file_path, ignore_case=ignore_var_case)
 
-	def __validate_essential_args(self) -> None:
-		toml_path: _Path = self.toml_path
-		if toml_path is None:
-			self.toml_path = toml_path = _Path('')
-		if isinstance(toml_path, str):
-			self.toml_path = toml_path = _Path(toml_path)
-		if isinstance(toml_path, _PathLike) and not isinstance(toml_path, _Path):
-			self.toml_path = toml_path = _Path(str(toml_path))
-		if not isinstance(toml_path, _Path):
-			if isinstance(toml_path, _PathLike):
-				self.toml_path = toml_path = _Path(str(toml_path))
-			else:
-				raise TypeError(f"Invalid type for 'toml_path': {toml_path!r}")
-
-		toml_path_str = str(toml_path)
-		if not toml_path_str.strip('.'):
-			raise ValueError(f"No 'toml_path' was specified: {toml_path_str!r}")
-
-		toml_data = self.toml_data
-		if not toml_data:
-			raise ValueError(f"Data-dict (for {toml_path_str!r}) cannot be empty: {toml_data!r}")
-		if not isinstance(toml_data, _Mapping):
-			raise TypeError(f"Not a data-dict (for {toml_path_str!r}): {toml_data!r}")
-		if not isinstance(toml_data, (dict, _OrderedDict)):
-			# Enforce the root data object to be exactly dict, not just *SOME* mapping
-			self.toml_data = toml_data = {k: v for k, v in toml_data.items()}
-
-	def get_dynamic_file_path(self) -> _Path:
-		"""
-		Detect the dynamic file path from the passed args and make sure it actually exists.
-
-		:raises IsADirectoryError: Path exists, but it's not a file.
-		:raises FileNotFoundError: No file at the path.
-		"""
-		self.__validate_essential_args()
-		toml_path: _Path = self.toml_path
-		assert isinstance(toml_path, _Path)
-		proj_dir = toml_path.parent
-		dynamic_field_value = self.read_dynamic_field()
-
-		path = proj_dir / dynamic_field_value
-		path = path.resolve()
-		if path.is_file():
-			return path
-
-		# Such file doesn't exist - need to check deeper
-
-		# Just the extension missing?
-		_path = _Path(str(path) + '.py')
-		if _path.is_file():
-			return _path
-
-		# Not a file because a dir?
-		if path.exists():
-			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(path))
-
-		# Maybe the file path was specified as an imported module path? ('module.path' instead of 'module/path.py')
-		module_segs = dynamic_field_value.split('.')
-		module_segs[-1] += '.py'
-		file_subpath = '/'.join(module_segs)
-		_path = proj_dir / file_subpath
-		if _path.is_file():
-			return _path
-
-		# Again - a dir instead of file?
-		if _path.exists():
-			raise IsADirectoryError(_errno.EISDIR, _strerror(_errno.EISDIR), str(_path))
-
-		# No luck
-		raise FileNotFoundError(_errno.ENOENT, _strerror(_errno.ENOENT), str(path))
-
-	def _get_field_from_toml_data(
-		self, field_path: str, what: str, msg_if_required: str = ''
-	) -> _A:
-		"""Internal: walk through the ``toml_data`` dict and extract the config's field value by a given path."""
-		self.__validate_essential_args()
-		toml_path_str = str(self.toml_path)
-
-		if msg_if_required and not field_path:
-			raise ValueError(f"{what} (for {toml_path_str!r}) is required {msg_if_required}")
-		if not isinstance(field_path, str):
-			raise TypeError(f"{what} (for {toml_path_str!r}) is not a string: {field_path!r}")
-
-		value: _A = self.toml_data
-		segs = field_path.split('.')
-		segs_current_parent: _List[str] = []
-		for seg in segs:
-			if not isinstance(value, _Mapping):
-				cur_path = '.'.join(segs_current_parent)
-				raise TypeError(f"{what}: {cur_path!r} is not a TOML section/dict (in {toml_path_str!r}): {value!r}")
-			if seg not in value:
-				cur_path = '.'.join(segs_current_parent + [seg])
-				raise KeyError(f"{what}: No such element (in {toml_path_str!r}): {cur_path!r}")
-			value = value[seg]
-			segs_current_parent.append(seg)
-
-		return value
-
-	def read_dynamic_field(self) -> str:
-		"""Get a value of the TOML field specified in ``dynamic_field``."""
-		dynamic_field = self.dynamic_field
-		value = self._get_field_from_toml_data(
-			dynamic_field,
-			what='Dynamic field',
-			msg_if_required="when version is dynamic and backend is unknown/fallback/auto"
-		)
-		toml_path_str = str(self.toml_path)
-		if not value:
-			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is empty: {value!r}")
-		if not isinstance(value, str):
-			raise TypeError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is not a string: {value!r}")
-		if not value.strip():
-			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) can't contain only whitespaces: {value!r}")
-		return value
-
 	def __post_init__(self):
-		self.__validate_essential_args()
+		super().__post_init__()
 		if type(self) is not DynDetector:
 			return
 
 		# We're actually trying to instantiate the `DynDetector` itself - ensure dynamic field is valid:
 		self.read_dynamic_field()
-
-	# TODO: directly coded here for py3.6 support, to be replaced with dataclass use for 3.7+:
-
-	def __init__(self, *args, **kwargs):
-		super(DynDetector, self).__init__(*args, **kwargs)
-		self.__post_init__()
 
 
 T_Detector = _TypeVar('T_Detector', bound=DynDetector)
