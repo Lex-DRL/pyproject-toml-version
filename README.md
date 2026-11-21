@@ -21,8 +21,19 @@ from pyproject_toml_version import pyproject_version
 from pyproject_toml_version import *
 
 version: str = pyproject_version('pyproject.toml')
+
+# And to use dynamic versions with not-yet-supported backends
+version: str = pyproject_version('pyproject.toml', dynamic_field='tool.unknown.version.file-path')
 ```
 
-> [!WARNING]
-> ## 🚧🏗️ `TODO:` Dynamic versions
-> Dynamic versions support is planned, but - in this first minimal release - only static version is detected.
+> [!NOTE]
+> ## 🚧🏗️ Dynamic versions supported only partially
+> Better support for dynamic versions is planned, but at the moment - only the following detected:
+> - static versions - nothing to mishandle here, they just work ✅
+> - Hatchling backend:
+>   - [regex](https://hatch.pypa.io/latest/version/)-based detection (default or custom pattern) ✅
+>   - [code](https://hatch.pypa.io/latest/plugins/version-source/code/), [env](https://hatch.pypa.io/latest/plugins/version-source/env/) or [custom plugins](https://hatch.pypa.io/latest/plugins/version-source/reference/) ❌
+>   - Only the main `pyproject.toml` is read, not external `hatch.toml` ⚠️
+> - Any other backends are treated in "fallback" mode - with a universal dynamic-version-detector, which tries to extract the dynamic version by **guessing** from the most common formats, and it also requires you to explicitly specify the field in `pyproject.toml` to read for the dynamic-version source (the python file keeping the version).
+>   - Catches `__version__` or `VERSION` as variable names in the file; case ignored.
+>   - Very likely, it would "just work" for you, but not guaranteed. Test before relying on the package.
