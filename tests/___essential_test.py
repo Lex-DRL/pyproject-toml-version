@@ -15,3 +15,11 @@ def test_import_package():
 	except ImportError as e:
 		assert False, f"Can't import the package: {e!r}"
 	assert True
+
+
+def test_version_import():
+	try:
+		from pyproject_toml_version import __version__
+	except ImportError as e:
+		assert False, f"Can't import '__version__' from the package: {e!r}"
+	assert True
