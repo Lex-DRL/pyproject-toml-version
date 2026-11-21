@@ -19,7 +19,7 @@ on:
     branches:
       - main
     paths:
-      - "pyproject.toml"
+      - "src/pyproject_toml_version/__meta.py"
   workflow_call:  # Make the workflow reusable in other workflows
     inputs:
       concurrency_group_id:
