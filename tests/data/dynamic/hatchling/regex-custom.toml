@@ -1,0 +1,11 @@
+# '2.71.82.'
+
+[build-system]
+build-backend = "hatchling.build"
+
+[project]
+dynamic = ["version"]
+
+[tool.hatch.version]
+path = "_regex_custom.py"
+pattern = "(?i)^hottie\\s*=\\s*('''|\"\"\"|'|\")[a-z\\s]*(?P<version>[\\d\\.]+).*?"
