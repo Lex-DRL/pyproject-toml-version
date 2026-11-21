@@ -1,0 +1,10 @@
+# "0.0.1a"
+
+[build-system]
+build-backend = "hatchling.build"
+
+[project]
+dynamic = ["version"]
+
+[tool.hatch.version]
+path = "src/fake_module/_minimal_v.py"

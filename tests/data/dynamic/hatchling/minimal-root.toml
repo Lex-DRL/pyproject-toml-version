@@ -1,0 +1,10 @@
+# 'aaa.bbb.ccc'
+
+[build-system]
+build-backend = "hatchling.build"
+
+[project]
+dynamic = ["version"]
+
+[tool.hatch.version]
+path = "_minimal.py"
