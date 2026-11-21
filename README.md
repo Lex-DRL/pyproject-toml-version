@@ -31,7 +31,7 @@ version = pyproject_version(dynamic_field='tool.unknown.version.file-path')
 ```
 
 > [!NOTE]
-> ## 🚧🏗️ Dynamic versions supported only partially
+> ## 🚧🏗️ Dynamic versions supported only partially (but good enough)
 > Better support is planned, but at the moment - the status is as follows:
 > 
 > | Feature | Status | Notes |
@@ -39,6 +39,7 @@ version = pyproject_version(dynamic_field='tool.unknown.version.file-path')
 > | Static versions<br />(any backend) | ✅ Just work: nothing to mishandle here | `project.version` field in your `pyproject.toml` |
 > | Dynamic version:<br />**Hatchling** backend | ✅ Supported for most common cases<br />⚠️ Limitations on edge cases | ✅ [regex](https://hatch.pypa.io/latest/version/)-based detection that the official docs suggest (default or custom pattern)<br />❌ [code](https://hatch.pypa.io/latest/plugins/version-source/code/), [env](https://hatch.pypa.io/latest/plugins/version-source/env/) or [custom plugins](https://hatch.pypa.io/latest/plugins/version-source/reference/) as dynamic-version sources<br />⚠️ Only the main `pyproject.toml` is read, not external `hatch.toml` |
 > | Dynamic version:<br />other backends | ❔ Likely yes - fallback mode<br />(see below) | `pyproject-toml-version` tries to extract the dynamic version by **guessing** from the most common formats, and it also requires you to explicitly specify the field to read from `pyproject.toml` for the dynamic-version source (the python file keeping the version) |
+> | Dynamic version:<br />version-var names | ✅ The standard ones | ✅ Catches `__version__` / `VERSION`, any case (even mixed)<br />✅ For **Hatchling**, other names are caught with the native approach for custom regex-pattern |
 
 ## Fallback mode
 Assume you have the following file structure:
