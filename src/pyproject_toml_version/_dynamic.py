@@ -10,6 +10,7 @@ from collections import OrderedDict as _OrderedDict
 import errno as _errno
 from os import PathLike as _PathLike, strerror as _strerror
 from pathlib import Path as _Path
+import re as _re
 import warnings as _warnings
 
 from typing_clean import *
@@ -17,6 +18,7 @@ from typing_clean import *
 from .__ensure_overrides import _ensure_required_overrides
 from .__version_extractor import (
 	extract_version_with_import as _extract_version_with_import,
+	extract_version_with_regex as _extract_version_with_regex,
 	extract_version_with_regex_by_names as _extract_version_with_regex_by_names
 )
 
@@ -33,7 +35,8 @@ class _BaseArgs:
 	__slots__ = ('toml_path', 'toml_data', 'dynamic_field')
 
 	def __init__(self, toml_path: _U[str, _PathLike], toml_data: _Dict[str, _A], dynamic_field: str = None):
-		self.toml_path: _U[str, _PathLike] = toml_path
+		# noinspection PyTypeChecker
+		self.toml_path: _Path = toml_path
 		self.toml_data: _Dict[str, _A] = toml_data
 		self.dynamic_field: str = dynamic_field
 
@@ -69,7 +72,7 @@ class _BaseArgs:
 			else:
 				raise TypeError(f"Invalid type for 'toml_path': {toml_path!r}")
 
-		toml_path_str = str(toml_path)
+		toml_path_str = toml_path.as_posix()
 		if not toml_path_str.strip('.'):
 			raise ValueError(f"No 'toml_path' was specified: {toml_path_str!r}")
 
@@ -88,7 +91,7 @@ class _BaseArgs:
 	) -> _A:
 		"""Internal: walk through the ``toml_data`` dict and extract the config's field value by a given path."""
 		self._validate_essential_args()
-		toml_path_str = str(self.toml_path)
+		toml_path_str = self.toml_path.as_posix()
 
 		if msg_if_required and not field_path:
 			raise ValueError(f"{what} (for {toml_path_str!r}) is required {msg_if_required}")
@@ -110,15 +113,19 @@ class _BaseArgs:
 
 		return value
 
-	def read_dynamic_field(self) -> str:
-		"""Get a value of the TOML field specified in ``dynamic_field``."""
-		dynamic_field = self.dynamic_field
+	def _read_dynamic_field(self, dynamic_field: str = '') -> str:
+		"""
+		Internal method with actual implementation of how a dynamic field is read.
+
+		It is its own function to allow backend-specific classes intercept the dynamic field to read
+		(without overriding ``dynamic_field`` arg itself).
+		"""
 		value = self._get_field_from_toml_data(
 			dynamic_field,
 			what='Dynamic field',
 			msg_if_required="when version is dynamic and backend is unknown/fallback/auto"
 		)
-		toml_path_str = str(self.toml_path)
+		toml_path_str = self.toml_path.as_posix()
 		if not value:
 			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) is empty: {value!r}")
 		if not isinstance(value, str):
@@ -127,7 +134,11 @@ class _BaseArgs:
 			raise ValueError(f"Dynamic field ({dynamic_field!r} in {toml_path_str!r}) can't contain only whitespaces: {value!r}")
 		return value
 
-	def get_dynamic_file_path(self) -> _Path:
+	def read_dynamic_field(self) -> str:
+		"""Get a value of the TOML field specified in ``dynamic_field``."""
+		return self._read_dynamic_field(self.dynamic_field)
+
+	def get_dynamic_file_path(self, strict=False) -> _Path:
 		"""
 		Detect the dynamic file path from the passed args and make sure it actually exists.
 
@@ -145,6 +156,9 @@ class _BaseArgs:
 		path = path.resolve()
 		if path.is_file():
 			return path
+		if strict:
+			# No second chances - the path must be a real filepath
+			raise FileNotFoundError(_errno.ENOENT, _strerror(_errno.ENOENT), str(path))
 
 		# Such file doesn't exist - need to check deeper
 
@@ -311,3 +325,107 @@ class DynDetector(_BaseArgs):
 
 
 T_Detector = _TypeVar('T_Detector', bound=DynDetector)
+
+
+# ------------------------------------------------------------------------------
+
+
+_re_hatchling = _re.compile(
+	r'''^(__version__|VERSION) *= *(['"])v?(?P<version>.+?)\2''',
+	flags=_re.IGNORECASE
+)
+
+
+class _DynDetectorHatchling(DynDetector):
+
+	def _read_dynamic_field(self, dynamic_field: str = '') -> str:
+		return super()._read_dynamic_field('tool.hatch.version.path')
+
+	def get_dynamic_file_path(self, strict=True) -> _Path:
+		return super().get_dynamic_file_path(strict=strict)
+
+	@staticmethod
+	def backend_name() -> str:
+		return 'Hatchling'
+
+	@staticmethod
+	def _is_matching_class(base_args: _BaseArgs, **kwargs) -> bool:
+		# noinspection PyBroadException
+		try:
+			backend = base_args._get_field_from_toml_data(
+				'build-system.build-backend',
+				what='Build-backend field',
+			)
+		except Exception:
+			return False
+		return backend == 'hatchling.build'
+
+	def version_str(self) -> str:
+		# https://hatch.pypa.io/latest/version/
+		self._validate_essential_args()
+		dyn_section = self.__dyn_section()
+		source_map: _Dict[str, _C[[dict], str]] = {
+			'regex': self.__version_str_regex,
+			'code': self.__version_str_code,
+			'env': self.__version_str_env,
+		}
+
+		# https://hatch.pypa.io/latest/plugins/version-source/reference/
+		source = dyn_section.get('source', 'regex')
+		if source is None or source == '':
+			source = 'regex'
+		source = self.__validate_toml_str_attr(source, 'tool.hatch.version.source')
+
+		if source not in source_map:
+			raise NotImplementedError(f"Unknown [tool.hatch.version.source] for [{self.backend_name()}]: {source!r}")
+		func = source_map[source]
+		return func(dyn_section)
+
+	def __dyn_section(self) -> _Dict[str, _A]:
+		dyn_section = self._get_field_from_toml_data(
+			'tool.hatch.version',
+			what='Dynamic-version section',
+		)
+		if not isinstance(dyn_section, _Mapping):
+			toml_path_str = self.toml_path.as_posix()
+			raise TypeError(f"[tool.hatch.version] (in {toml_path_str}) isn't a section but: {dyn_section!r}")
+		if not isinstance(dyn_section, (dict, _OrderedDict)):
+			dyn_section = {k: v for k, v in dyn_section.items()}
+		return dyn_section
+
+	def __validate_toml_str_attr(self, value: _A, path: str, strip = True) -> str:
+		if not isinstance(value, str):
+			raise TypeError(f"Not-a-string as [{path}] for [{self.backend_name()}]: {value!r}")
+		if not (value.strip() if strip else value):
+			raise TypeError(f"Empty [{path}] for [{self.backend_name()}]: {value!r}")
+		return value
+
+	def __version_str_regex(self, dyn_section: _Dict[str, _A]) -> str:
+		# https://hatch.pypa.io/latest/plugins/version-source/regex/
+		file_path = self.get_dynamic_file_path()
+		regex = self.__get_regex_pattern(dyn_section)
+		return _extract_version_with_regex(file_path, regex, version_gr='version')
+
+	def __get_regex_pattern(self, dyn_section: _Dict[str, _A]) -> _Pattern:
+		if 'pattern' not in dyn_section:
+			return _re_hatchling
+		pattern = dyn_section['pattern']
+		if pattern is None or pattern == '':
+			return _re_hatchling
+
+		pattern = self.__validate_toml_str_attr(pattern, 'tool.hatch.version.pattern')
+		return _re.compile(pattern)
+
+	def __version_str_not_implemented(self, source: str) -> str:
+		raise NotImplementedError(
+			f"Only 'regex' is currently supported as [tool.hatch.version.source] for [{self.backend_name()}]. "
+			f"Got: {source!r}"
+		)
+
+	def __version_str_code(self, dyn_section: _Dict[str, _A]) -> str:
+		# https://hatch.pypa.io/latest/plugins/version-source/code/
+		return self.__version_str_not_implemented('code')
+
+	def __version_str_env(self, dyn_section: _Dict[str, _A]) -> str:
+		# https://hatch.pypa.io/latest/plugins/version-source/env/
+		return self.__version_str_not_implemented('env')
