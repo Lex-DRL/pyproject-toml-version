@@ -21,6 +21,7 @@ from os import PathLike as _PathLike
 import tomli as _tomli
 from typing_clean import *
 
+from .__meta import __version__
 from ._dynamic import DynDetector as _DynDetector
 
 
