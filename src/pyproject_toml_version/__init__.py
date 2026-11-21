@@ -81,7 +81,7 @@ def __validate_ver_str(version, toml_path: _U[str, _PathLike], what: str = 'vers
 	return version
 
 
-def pyproject_version(toml_path: _U[str, _PathLike] = 'pyproject.toml', dynamic_field: _O[str] = None) -> str:
+def pyproject_version(toml_path: _U[str, _PathLike] = 'pyproject.toml', *, dynamic_field: _O[str] = None) -> str:
 	"""Get version from 'pyproject.toml' - static or dynamic, regardless of backend."""
 	if not isinstance(toml_path, (str, _PathLike)):
 		raise TypeError(f"'toml_path' must be <str> or <PathLike>. Got: {toml_path!r}")
