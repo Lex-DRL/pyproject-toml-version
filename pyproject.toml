@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pyproject-toml-version"
 #dynamic = ["version"]
-version = "0.5.0"
+version = "1.0.0"
 description = "Get version from 'pyproject.toml' - static or dynamic, regardless of backend."
 authors = [
 	{ name="Lex Darlog (Lex-DRL)" },
