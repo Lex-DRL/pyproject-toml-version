@@ -21,7 +21,7 @@ from os import PathLike as _PathLike
 import tomli as _tomli
 from typing_clean import *
 
-from ._dynamic import *
+from ._dynamic import DynDetector as _DynDetector
 
 
 def __read_whole_toml(toml_path: _U[str, _PathLike] = 'pyproject.toml') -> _Dict[str, _A]:
@@ -101,7 +101,7 @@ def pyproject_version(toml_path: _U[str, _PathLike] = 'pyproject.toml', dynamic_
 
 	assert is_dynamic and not is_static
 	# Using `build` is fragile, need to reimplement for each popular build-backend
-	detector = DynDetector(toml_path=toml_path, toml_data=toml_data, dynamic_field=dynamic_field)
+	detector = _DynDetector(toml_path=toml_path, toml_data=toml_data, dynamic_field=dynamic_field)
 	version = detector.version_str()
 	backend_name = detector.backend_name()
 	return __validate_ver_str(version, toml_path, what=f'dynamic [{backend_name}] version', at='for')
